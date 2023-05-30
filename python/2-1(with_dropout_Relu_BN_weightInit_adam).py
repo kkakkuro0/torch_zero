@@ -7,15 +7,15 @@ import torch.nn.functional as F
 from torchvision import transforms, datasets
 
 # 장비확인
-if torch.cuda.is_available():
+if torch.backends.mps.is_available():
     DEVICE = torch.device('mps')
 else :
     DEVICE = torch.device('cpu')
-
+    
 print("device: ", DEVICE,", torch: ", torch.__version__)
 
 BATCH_SIZE = 32
-EPOCHS = 10
+EPOCHS = 30
 
 # 데이터 로드
 train_dataset = datasets.MNIST(root="../data/MNIST",
@@ -58,20 +58,34 @@ class Net(nn.Module):
         self.fc1 = nn.Linear(28*28,512)
         self.fc2 = nn.Linear(512,256)
         self.fc3 = nn.Linear(256,10)
+        self.dropout_prob = 0.5
+        self.batch_norm1 = nn.BatchNorm1d(512)
+        self.batch_norm2 = nn.BatchNorm1d(256)
 
     def forward(self,x):
         x = x.view(-1, 28*28)
         x = self.fc1(x)
-        x = F.sigmoid(x)
+        x = self.batch_norm1(x)
+        x = F.relu(x)
+        x = F.dropout(x, training=self.training, p=self.dropout_prob)
         x = self.fc2(x)
-        x = F.sigmoid(x)
+        x = self.batch_norm2(x)
+        x = F.relu(x)
+        x = F.dropout(x, training=self.training, p=self.dropout_prob)
         x = self.fc3(x)
         x = F.log_softmax(x, dim=1)
         return x
     
 # optimizer, objective function 정의
+import torch.nn.init as init
+def weight_init(m):
+    if isinstance(m,nn.Linear):
+        init.kaiming_uniform_(m.weight.data)
+
 model = Net().to(DEVICE)
-optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
+model = model.apply(weight_init)
+# optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 criterion = nn.CrossEntropyLoss()
 
 print(model)
